@@ -55,7 +55,7 @@
 
     <header>
         <div>
-            <h1>WEB-CODEC <span>PRO (P2P)</span></h1>
+            <h1>WEB-CODEC <span>PRO (P2P + TURN)</span></h1>
             <div class="subtitle">מערכת שידור דו-כיוונית אולפנית מבוססת WebRTC & Opus 48kHz</div>
         </div>
         <div class="status-box">
@@ -190,13 +190,21 @@
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         
-        // שרתי STUN יציבים של Google בלבד (ללא תלות בשרתי TURN צד שלישי שנופלים)
+        // שרתי STUN ו-TURN משולבים לעקיפת חומות אש ונתבים
         const rtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' }
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                }
             ]
         };
 
@@ -437,10 +445,10 @@
                 const state = peerConnection.connectionState;
                 logMsg(`WebRTC Peer State: ${state}`);
                 if (state === 'connected') {
-                    setStatus('connected', 'מחובר בשידור חי פעיל (P2P)');
+                    setStatus('connected', 'מחובר בשידור חי פעיל (P2P/TURN)');
                     startTelemetry();
                 } else if (state === 'connecting') {
-                    setStatus('waiting', 'מבצע לחיצת יד P2P...');
+                    setStatus('waiting', 'מבצע לחיצת יד מול חומת אש...');
                 } else if (state === 'disconnected' || state === 'failed') {
                     setStatus('', 'החיבור נותק - מנסה להתחבר מחדש');
                     stopTelemetry();
