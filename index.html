@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web-Codec Pro v4.0 | מערכת שידור P2P אולפנית</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; padding: 20px; max-width: 1050px; margin: 0 auto; line-height: 1.4; }
+        header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 24px; gap: 16px; }
+        h1 { font-size: 1.5rem; color: #38bdf8; letter-spacing: 0.5px; }
+        h1 span { color: #f59e0b; font-weight: 600; }
+        .subtitle { font-size: 0.78rem; color: #94a3b8; margin-top: 2px; }
+        .status-box { display: flex; align-items: center; gap: 10px; background: #1e293b; padding: 10px 16px; border-radius: 10px; border: 1px solid #334155; font-size: 0.875rem; font-weight: 500; }
+        .dot { width: 11px; height: 11px; border-radius: 50%; background: #ef4444; flex-shrink: 0; }
+        .dot.waiting { background: #eab308; animation: pulse 1.5s infinite; }
+        .dot.connected { background: #10b981; box-shadow: 0 0 8px #10b981; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 18px; }
+        .text-center { text-align: center; }
+        .role-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin: 18px 0; }
+        button { cursor: pointer; border: none; border-radius: 10px; font-weight: 700; transition: 0.2s; font-family: inherit; }
+        .btn-role { padding: 14px 26px; background: #0f172a; border: 1.5px solid #38bdf8; color: #38bdf8; font-size: 0.95rem; }
+        .btn-role:hover { background: #0284c7; color: #fff; }
+        .btn-role.active-studio { background: #0284c7; color: #fff; box-shadow: 0 0 12px rgba(2, 132, 199, 0.5); }
+        .btn-role.field { border-color: #a855f7; color: #c084fc; }
+        .btn-role.field:hover { background: #9333ea; color: #fff; }
+        .btn-role.active-field { background: #9333ea; color: #fff; box-shadow: 0 0 12px rgba(147, 51, 234, 0.5); }
+        .btn-start { background: #059669; color: #fff; padding: 14px 36px; font-size: 1rem; margin-top: 10px; }
+        .btn-start:hover { background: #10b981; }
+        .btn-secondary { background: #334155; color: #e2e8f0; padding: 6px 12px; font-size: 0.78rem; border-radius: 6px; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-danger { background: #7f1d1d; color: #fecaca; padding: 6px 14px; font-size: 0.8rem; border-radius: 6px; }
+        .btn-danger:hover { background: #991b1b; }
+        .input-group { max-width: 380px; margin: 16px auto; }
+        .input-group label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px; }
+        input[type="text"], select { width: 100%; background: #020617; border: 1px solid #475569; border-radius: 8px; padding: 10px 12px; color: #f8fafc; font-size: 0.9rem; outline: none; }
+        input[type="text"]:focus, select:focus { border-color: #38bdf8; }
+        .hidden { display: none !important; }
+        .top-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 20px; }
+        .telemetry { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: #cbd5e1; align-items: center; }
+        .badge { background: #0f172a; padding: 4px 10px; border-radius: 6px; border: 1px solid #334155; font-family: monospace; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+        .field-label { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; }
+        .meter-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        .meter-row span { font-family: monospace; font-size: 0.8rem; color: #94a3b8; width: 14px; }
+        canvas { background: #020617; border: 1px solid #334155; border-radius: 4px; width: 100%; height: 18px; }
+        .alert-box { background: #450a0a; border: 1px solid #ef4444; color: #fca5a5; padding: 14px 18px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 18px; line-height: 1.5; }
+        .log-box { background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; font-family: monospace; font-size: 0.75rem; color: #94a3b8; max-height: 130px; overflow-y: auto; direction: ltr; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>WEB-CODEC PRO <span>[v4.0]</span></h1>
+            <div class="subtitle">מערכת שידור דו-כיוונית אולפנית מבוססת WebRTC & Opus 48kHz</div>
+        </div>
+        <div class="status-box">
+            <span id="statusDot" class="dot"></span>
+            <span id="statusText">ממתין להגדרת עמדה</span>
+        </div>
+    </header>
+
+    <div id="policyAlert" class="alert-box hidden"></div>
+
+    <!-- שלב 1: בחירת תפקיד ושם חדר -->
+    <section id="roleSelectionSection" class="card text-center">
+        <h2 style="font-size: 1.15rem; margin-bottom: 6px;">הגדרת עמדת שידור</h2>
+        <p style="font-size: 0.82rem; color: #94a3b8;">בחר תפקיד והזן שם חדר זהה בשני הצדדים ליצירת חיבור ישיר</p>
+        
+        <div class="role-btns">
+            <button onclick="setRole('studio')" id="btnRoleStudio" class="btn-role">🎙️ אולפן ראשי (Studio)</button>
+            <button onclick="setRole('field')" id="btnRoleField" class="btn-role field">📻 כתב שטח (Field)</button>
+        </div>
+
+        <div class="input-group">
+            <label for="roomIdInput">שם חדר משותף (Room ID):</label>
+            <input type="text" id="roomIdInput" value="studio-live-101" style="text-align: center; font-family: monospace; color: #38bdf8;">
+        </div>
+
+        <button onclick="initApp()" class="btn-start">🚀 התחל שידור והתחבר לערוץ (v4.0)</button>
+    </section>
+
+    <!-- פאנל ראשי -->
+    <div id="mainAppPanel" class="hidden">
+        
+        <!-- סרגל טלמטריה וחיבור -->
+        <div class="card top-bar">
+            <div class="telemetry">
+                <div>עמדה: <strong id="activeRoleDisplay" style="color:#38bdf8;"></strong></div>
+                <div>חדר: <span id="activeRoomDisplay" class="badge" style="color:#10b981;"></span></div>
+                <div>דילאיי (RTT): <span id="rttDisplay" class="badge">-- ms</span></div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="reconnectPeer()" class="btn-secondary">🔄 חבר מחדש</button>
+                <button onclick="window.location.reload()" class="btn-danger">נתק / החלף עמדה</button>
+            </div>
+        </div>
+
+        <!-- הגדרות אודיו, Dante ו-Opus -->
+        <div class="grid-3">
+            
+            <!-- כניסת שמע -->
+            <div class="card">
+                <div class="field-label">
+                    <span>כניסת שמע (Mic / Dante In)</span>
+                    <button onclick="loadAudioDevices()" class="btn-secondary" style="padding: 2px 8px; font-size: 0.7rem;">רענן</button>
+                </div>
+                <select id="audioInputSelect" onchange="initLocalAudio()"></select>
+                <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="echoCancel" onchange="initLocalAudio()">
+                    <label for="echoCancel" style="font-size: 0.78rem; color: #cbd5e1;">ביטול הד (סמן רק בעבודה ללא אוזניות)</label>
+                </div>
+            </div>
+
+            <!-- יציאת שמע -->
+            <div class="card">
+                <div class="field-label">
+                    <span>יציאת שמע / IFB (Dante Out)</span>
+                </div>
+                <select id="audioOutputSelect"></select>
+                <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="muteTxBtn" onchange="toggleMuteTx()">
+                    <label for="muteTxBtn" style="font-size: 0.78rem; color: #f87171; font-weight: 600;">השתק מיקרופון יוצא (Mute TX)</label>
+                </div>
+            </div>
+
+            <!-- איכות Opus ו-Gain -->
+            <div class="card">
+                <div class="field-label">
+                    <span>איכות מקודד Opus</span>
+                </div>
+                <select id="opusBitrate" onchange="reconnectPeer()" style="margin-bottom: 12px;">
+                    <option value="64000">64 kbps - כתב שטח (Mono)</option>
+                    <option value="128000" selected>128 kbps - FM Quality (Stereo)</option>
+                    <option value="256000">256 kbps - Studio Master (Stereo)</option>
+                </select>
+                <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+                        <span style="color: #94a3b8;">עוצמת שידור (TX Gain)</span>
+                        <span id="gainValueDisplay" style="color: #38bdf8; font-family: monospace; font-weight: bold;">100% (0.0 dB)</span>
+                    </div>
+                    <input type="range" id="txGainSlider" min="0" max="2" step="0.05" value="1" style="width: 100%; accent-color: #38bdf8;">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- מיטרים סטריאופוניים -->
+        <div class="grid-2">
+            <div class="card">
+                <strong style="color: #10b981; font-size: 0.9rem;">TX - שידור יוצא לאוויר</strong>
+                <div class="meter-row"><span>L</span><canvas id="txMeterL" width="400" height="18"></canvas></div>
+                <div class="meter-row"><span>R</span><canvas id="txMeterR" width="400" height="18"></canvas></div>
+            </div>
+            <div class="card">
+                <strong style="color: #38bdf8; font-size: 0.9rem;">RX - שידור נכנס (IFB)</strong>
+                <div class="meter-row"><span>L</span><canvas id="rxMeterL" width="400" height="18"></canvas></div>
+                <div class="meter-row"><span>R</span><canvas id="rxMeterR" width="400" height="18"></canvas></div>
+            </div>
+        </div>
+
+        <!-- יומן תקשורת טכני -->
+        <div class="card" style="padding: 14px;">
+            <div class="field-label" style="margin-bottom: 6px;"><span>יומן חיבורים ותקשורת (Signaling Log v4.0)</span></div>
+            <div id="techLog" class="log-box"></div>
+        </div>
+
+    </div>
+
+    <audio id="remoteAudio" autoplay playsinline></audio>
+
+    <script>
+        let chosenRole = null;
+        let roomName = '';
+        let peerConnection = null;
+        let audioCtx = null;
+        let localStream = null;
+        let processedStream = null;
+        let gainNode = null;
+        let txAnalyserL, txAnalyserR, rxAnalyserL, rxAnalyserR;
+        let mqttClient = null;
+        let statsInterval = null;
+        let pendingCandidates = [];
+        const instanceId = Math.random().toString(36).substring(2, 10);
+
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        
+        // שרתי STUN ו-TURN עם מדיניות מורחבת (bundlePolicy) למניעת קטיעה מוקדמת
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                }
+            ],
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require'
+        };
+
+        function logMsg(msg) {
+            const box = document.getElementById('techLog');
+            const time = new Date().toLocaleTimeString('he-IL', { hour12: false });
+            box.innerHTML += `<div>[${time}] ${msg}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function setStatus(state, text) {
+            statusDot.className = 'dot ' + state;
+            statusText.textContent = text;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (document.featurePolicy && !document.featurePolicy.allowsFeature('microphone')) {
+                const alertBox = document.getElementById('policyAlert');
+                alertBox.classList.remove('hidden');
+                alertBox.innerHTML = '<strong>השרת חוסם גישה למיקרופון (Permissions Policy Violation):</strong><br>העמוד נטען בתוך מסגרת ללא הרשאת מיקרופון או שהשרת שולח כותרת <code>Permissions-Policy: microphone=()</code>.';
+            }
+        });
+
+        function setRole(role) {
+            chosenRole = role;
+            document.getElementById('btnRoleStudio').className = role === 'studio' ? 'btn-role active-studio' : 'btn-role';
+            document.getElementById('btnRoleField').className = role === 'field' ? 'btn-role field active-field' : 'btn-role field';
+        }
+
+        async function initApp() {
+            if (!chosenRole) return alert('אנא בחר תפקיד: אולפן או כתב שטח');
+            roomName = document.getElementById('roomIdInput').value.trim();
+            if (!roomName) return alert('אנא הזן שם חדר');
+
+            try {
+                setStatus('waiting', 'מבקש גישה להתקני שמע...');
+                await initLocalAudio();
+                await loadAudioDevices();
+
+                document.getElementById('roleSelectionSection').classList.add('hidden');
+                document.getElementById('mainAppPanel').classList.remove('hidden');
+                document.getElementById('activeRoleDisplay').textContent = chosenRole === 'studio' ? '🎙️ אולפן ראשי' : '📻 כתב שטח';
+                document.getElementById('activeRoomDisplay').textContent = roomName;
+
+                logMsg(`v4.0 Initialized as [${chosenRole.toUpperCase()}] in room [${roomName}]`);
+                connectSignalingServer();
+            } catch (err) {
+                setStatus('', 'שגיאת הרשאת מיקרופון');
+                const alertBox = document.getElementById('policyAlert');
+                alertBox.classList.remove('hidden');
+                alertBox.innerHTML = `<strong>שגיאה בגישה למיקרופון (${err.name}):</strong> ${err.message}`;
+            }
+        }
+
+        async function loadAudioDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const inSel = document.getElementById('audioInputSelect');
+                const outSel = document.getElementById('audioOutputSelect');
+                const prevIn = inSel.value;
+                const prevOut = outSel.value;
+
+                inSel.innerHTML = '';
+                outSel.innerHTML = '<option value="">ברירת מחדל של מערכת ההפעלה</option>';
+
+                devices.forEach(d => {
+                    if (d.kind === 'audioinput') {
+                        inSel.add(new Option(d.label || `כניסת שמע ${inSel.length + 1}`, d.deviceId));
+                    } else if (d.kind === 'audiooutput') {
+                        outSel.add(new Option(d.label || `יציאת שמע / Dante ${outSel.length}`, d.deviceId));
+                    }
+                });
+
+                if (prevIn) inSel.value = prevIn;
+                if (prevOut) outSel.value = prevOut;
+                logMsg(`Audio devices enumerated: ${inSel.length} inputs, ${outSel.length - 1} outputs`);
+            } catch (e) {
+                logMsg(`Device enumeration warning: ${e.message}`);
+            }
+        }
+
+        document.getElementById('audioOutputSelect').addEventListener('change', async (e) => {
+            const devId = e.target.value;
+            const remoteAudio = document.getElementById('remoteAudio');
+            if (typeof remoteAudio.setSinkId === 'function' && devId) {
+                try {
+                    await remoteAudio.setSinkId(devId);
+                    logMsg(`Output routed to device ID: ${devId.slice(0, 8)}...`);
+                } catch (err) {
+                    logMsg(`Output routing error: ${err.message}`);
+                }
+            }
+        });
+
+        document.getElementById('txGainSlider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            if (gainNode && !document.getElementById('muteTxBtn').checked) {
+                gainNode.gain.value = val;
+            }
+            const db = val === 0 ? '-∞' : (20 * Math.log10(val)).toFixed(1);
+            document.getElementById('gainValueDisplay').textContent = `${Math.round(val * 100)}% (${db} dB)`;
+        });
+
+        function toggleMuteTx() {
+            const isMuted = document.getElementById('muteTxBtn').checked;
+            if (gainNode) {
+                gainNode.gain.value = isMuted ? 0 : parseFloat(document.getElementById('txGainSlider').value);
+            }
+            logMsg(isMuted ? 'TX Muted' : 'TX Unmuted');
+        }
+
+        async function initLocalAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+            const inputId = document.getElementById('audioInputSelect').value;
+            const useEcho = document.getElementById('echoCancel').checked;
+
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+            }
+
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    deviceId: inputId ? { exact: inputId } : undefined,
+                    channelCount: 2,
+                    sampleRate: 48000,
+                    echoCancellation: useEcho,
+                    noiseSuppression: useEcho,
+                    autoGainControl: false
+                }
+            });
+
+            const source = audioCtx.createMediaStreamSource(localStream);
+            gainNode = audioCtx.createGain();
+            const isMuted = document.getElementById('muteTxBtn').checked;
+            gainNode.gain.value = isMuted ? 0 : parseFloat(document.getElementById('txGainSlider').value);
+
+            const splitter = audioCtx.createChannelSplitter(2);
+            txAnalyserL = audioCtx.createAnalyser();
+            txAnalyserR = audioCtx.createAnalyser();
+            txAnalyserL.fftSize = 256;
+            txAnalyserR.fftSize = 256;
+
+            source.connect(gainNode);
+            gainNode.connect(splitter);
+            splitter.connect(txAnalyserL, 0);
+            splitter.connect(txAnalyserR, 1);
+
+            const dest = audioCtx.createMediaStreamDestination();
+            gainNode.connect(dest);
+            processedStream = dest.stream;
+
+            if (peerConnection) {
+                const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+                if (sender) {
+                    await sender.replaceTrack(processedStream.getAudioTracks()[0]);
+                    logMsg('Audio input track updated live');
+                }
+            }
+
+            requestAnimationFrame(drawMeters);
+        }
+
+        function setOpusQuality(sdp) {
+            const bitrate = document.getElementById('opusBitrate').value;
+            const isStereo = parseInt(bitrate) >= 128000 ? 1 : 0;
+            const lines = sdp.split('\r\n');
+            let opusPayload = null;
+
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].includes('opus/48000')) {
+                    const match = lines[i].match(/a=rtpmap:(\d+) opus\/48000/);
+                    if (match) { opusPayload = match[1]; break; }
+                }
+            }
+            if (!opusPayload) return sdp;
+
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith(`a=fmtp:${opusPayload}`)) {
+                    lines[i] += `;maxaveragebitrate=${bitrate};stereo=${isStereo};sprop-stereo=${isStereo};usedtx=0;cbr=1`;
+                    break;
+                }
+            }
+            return lines.join('\r\n');
+        }
+
+        function sendSignal(payload) {
+            if (!mqttClient || !mqttClient.connected) return;
+            const topic = `webcodec-pro-p2p/${roomName}`;
+            const message = JSON.stringify({
+                ...payload,
+                senderId: instanceId,
+                role: chosenRole
+            });
+            mqttClient.publish(topic, message, { qos: 0 });
+        }
+
+        function setupPeerConnection() {
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            pendingCandidates = [];
+            peerConnection = new RTCPeerConnection(rtcConfig);
+
+            processedStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, processedStream);
+            });
+
+            peerConnection.ontrack = (event) => {
+                const [remoteStream] = event.streams;
+                const remoteAudio = document.getElementById('remoteAudio');
+                remoteAudio.srcObject = remoteStream;
+                remoteAudio.play().catch(e => logMsg(`Autoplay blocked: ${e.message}`));
+
+                const remoteSource = audioCtx.createMediaStreamSource(remoteStream);
+                const splitter = audioCtx.createChannelSplitter(2);
+                rxAnalyserL = audioCtx.createAnalyser();
+                rxAnalyserR = audioCtx.createAnalyser();
+                rxAnalyserL.fftSize = 256;
+                rxAnalyserR.fftSize = 256;
+                remoteSource.connect(splitter);
+                splitter.connect(rxAnalyserL, 0);
+                splitter.connect(rxAnalyserR, 1);
+                logMsg('Remote audio stream received and routed to RX meters');
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    sendSignal({
+                        type: 'candidate',
+                        candidate: event.candidate
+                    });
+                } else {
+                    logMsg('ICE gathering complete');
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                const state = peerConnection.connectionState;
+                logMsg(`WebRTC Peer State: ${state}`);
+                if (state === 'connected') {
+                    setStatus('connected', 'מחובר בשידור חי פעיל (v4.0)');
+                    startTelemetry();
+                } else if (state === 'connecting') {
+                    setStatus('waiting', 'מבצע לחיצת יד מול חומת אש...');
+                } else if (state === 'disconnected' || state === 'failed') {
+                    setStatus('', `החיבור נותק (${state}) - מנסה להתחבר מחדש`);
+                    stopTelemetry();
+                }
+            };
+        }
+
+        function connectSignalingServer(brokerIndex = 0) {
+            if (mqttClient) {
+                mqttClient.end(true);
+            }
+
+            const brokers = [
+                'wss://broker.emqx.io:8084/mqtt',
+                'wss://broker.hivemq.com:8884/mqtt'
+            ];
+            const brokerUrl = brokers[brokerIndex % brokers.length];
+
+            setStatus('waiting', 'מתחבר לשרת תיווך...');
+            logMsg(`Connecting to signaling broker: ${brokerUrl}`);
+
+            mqttClient = mqtt.connect(brokerUrl, {
+                clientId: `webcodec_${chosenRole}_${instanceId}`,
+                clean: true,
+                connectTimeout: 5000,
+                reconnectPeriod: 3000
+            });
+
+            const topic = `webcodec-pro-p2p/${roomName}`;
+
+            mqttClient.on('connect', () => {
+                logMsg('Connected to signaling broker successfully');
+                mqttClient.subscribe(topic, (err) => {
+                    if (!err) {
+                        logMsg(`Subscribed to channel: ${roomName}`);
+                        sendSignal({ type: 'join' });
+
+                        if (chosenRole === 'studio') {
+                            setStatus('waiting', 'ממתין לכתב שטח שיצטרף לחדר...');
+                        } else {
+                            setStatus('waiting', 'מחפש אולפן בחדר...');
+                            initiateOffer();
+                        }
+                    }
+                });
+            });
+
+            mqttClient.on('message', async (receivedTopic, payloadBuffer) => {
+                if (receivedTopic !== topic) return;
+                let msg;
+                try {
+                    msg = JSON.parse(payloadBuffer.toString());
+                } catch (e) {
+                    return;
+                }
+
+                if (msg.senderId === instanceId) return;
+
+                if (msg.type === 'join' && msg.role === 'studio' && chosenRole === 'field') {
+                    logMsg('Studio detected in room, sending Offer...');
+                    initiateOffer();
+                }
+
+                if (msg.type === 'offer' && chosenRole === 'studio') {
+                    logMsg('Received Offer from Field, generating Answer...');
+                    setupPeerConnection();
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
+                    await flushCandidates();
+
+                    const answer = await peerConnection.createAnswer();
+                    answer.sdp = setOpusQuality(answer.sdp);
+                    await peerConnection.setLocalDescription(answer);
+
+                    sendSignal({
+                        type: 'answer',
+                        answer: peerConnection.localDescription
+                    });
+                } else if (msg.type === 'answer' && chosenRole === 'field' && peerConnection) {
+                    logMsg('Received Answer from Studio');
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
+                    await flushCandidates();
+                } else if (msg.type === 'candidate' && msg.role !== chosenRole) {
+                    if (peerConnection && peerConnection.remoteDescription) {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
+                    } else {
+                        pendingCandidates.push(msg.candidate);
+                    }
+                }
+            });
+
+            mqttClient.on('error', (err) => {
+                logMsg(`Signaling error: ${err.message}`);
+            });
+
+            mqttClient.on('offline', () => {
+                logMsg('Signaling broker offline, retrying...');
+            });
+        }
+
+        async function flushCandidates() {
+            while (pendingCandidates.length > 0) {
+                const c = pendingCandidates.shift();
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+                } catch (e) {
+                    logMsg(`Candidate add error: ${e.message}`);
+                }
+            }
+        }
+
+        async function initiateOffer() {
+            setupPeerConnection();
+            const offer = await peerConnection.createOffer();
+            offer.sdp = setOpusQuality(offer.sdp);
+            await peerConnection.setLocalDescription(offer);
+
+            sendSignal({
+                type: 'offer',
+                offer: peerConnection.localDescription
+            });
+            logMsg('Offer sent, waiting for Studio answer...');
+        }
+
+        function reconnectPeer() {
+            logMsg('Manual reconnect triggered');
+            if (mqttClient && mqttClient.connected) {
+                sendSignal({ type: 'join' });
+                if (chosenRole === 'field') {
+                    initiateOffer();
+                } else {
+                    setStatus('waiting', 'ממתין לכתב שטח...');
+                }
+            } else {
+                connectSignalingServer(1);
+            }
+        }
+
+        function startTelemetry() {
+            stopTelemetry();
+            statsInterval = setInterval(async () => {
+                if (!peerConnection) return;
+                const stats = await peerConnection.getStats();
+                stats.forEach(report => {
+                    if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.currentRoundTripTime) {
+                        const rttMs = Math.round(report.currentRoundTripTime * 1000);
+                        document.getElementById('rttDisplay').textContent = `${rttMs} ms`;
+                    }
+                });
+            }, 2000);
+        }
+
+        function stopTelemetry() {
+            if (statsInterval) clearInterval(statsInterval);
+            document.getElementById('rttDisplay').textContent = '-- ms';
+        }
+
+        function renderBar(analyser, id) {
+            const canvas = document.getElementById(id);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!analyser) return;
+
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteTimeDomainData(data);
+            let max = 0;
+            for (let i = 0; i < data.length; i++) {
+                const v = Math.abs(data[i] - 128) / 128;
+                if (v > max) max = v;
+            }
+            const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            grad.addColorStop(0, '#10b981');
+            grad.addColorStop(0.75, '#eab308');
+            grad.addColorStop(1, '#ef4444');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width * Math.min(1, max * 1.6), canvas.height);
+        }
+
+        function drawMeters() {
+            renderBar(txAnalyserL, 'txMeterL');
+            renderBar(txAnalyserR, 'txMeterR');
+            renderBar(rxAnalyserL, 'rxMeterL');
+            renderBar(rxAnalyserR, 'rxMeterR');
+            requestAnimationFrame(drawMeters);
+        }
+    </script>
+</body>
+</html>
