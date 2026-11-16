@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web-Codec Pro | מערכת שידור P2P אולפנית</title>
+    <title>Web-Codec Pro v4.0 | מערכת שידור P2P אולפנית</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; padding: 20px; max-width: 1050px; margin: 0 auto; line-height: 1.4; }
         header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 24px; gap: 16px; }
         h1 { font-size: 1.5rem; color: #38bdf8; letter-spacing: 0.5px; }
-        h1 span { color: #fff; font-weight: 300; }
+        h1 span { color: #f59e0b; font-weight: 600; }
         .subtitle { font-size: 0.78rem; color: #94a3b8; margin-top: 2px; }
         .status-box { display: flex; align-items: center; gap: 10px; background: #1e293b; padding: 10px 16px; border-radius: 10px; border: 1px solid #334155; font-size: 0.875rem; font-weight: 500; }
         .dot { width: 11px; height: 11px; border-radius: 50%; background: #ef4444; flex-shrink: 0; }
@@ -55,7 +55,7 @@
 
     <header>
         <div>
-            <h1>WEB-CODEC <span>PRO (P2P + TURN)</span></h1>
+            <h1>WEB-CODEC PRO <span>[v4.0]</span></h1>
             <div class="subtitle">מערכת שידור דו-כיוונית אולפנית מבוססת WebRTC & Opus 48kHz</div>
         </div>
         <div class="status-box">
@@ -81,7 +81,7 @@
             <input type="text" id="roomIdInput" value="studio-live-101" style="text-align: center; font-family: monospace; color: #38bdf8;">
         </div>
 
-        <button onclick="initApp()" class="btn-start">🚀 התחל שידור והתחבר לערוץ</button>
+        <button onclick="initApp()" class="btn-start">🚀 התחל שידור והתחבר לערוץ (v4.0)</button>
     </section>
 
     <!-- פאנל ראשי -->
@@ -165,7 +165,7 @@
 
         <!-- יומן תקשורת טכני -->
         <div class="card" style="padding: 14px;">
-            <div class="field-label" style="margin-bottom: 6px;"><span>יומן חיבורים ותקשורת (Signaling Log)</span></div>
+            <div class="field-label" style="margin-bottom: 6px;"><span>יומן חיבורים ותקשורת (Signaling Log v4.0)</span></div>
             <div id="techLog" class="log-box"></div>
         </div>
 
@@ -190,7 +190,7 @@
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         
-        // שרתי STUN ו-TURN משולבים לעקיפת חומות אש ונתבים
+        // שרתי STUN ו-TURN עם מדיניות מורחבת (bundlePolicy) למניעת קטיעה מוקדמת
         const rtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -205,7 +205,9 @@
                     username: 'openrelayproject',
                     credential: 'openrelayproject'
                 }
-            ]
+            ],
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require'
         };
 
         function logMsg(msg) {
@@ -249,7 +251,7 @@
                 document.getElementById('activeRoleDisplay').textContent = chosenRole === 'studio' ? '🎙️ אולפן ראשי' : '📻 כתב שטח';
                 document.getElementById('activeRoomDisplay').textContent = roomName;
 
-                logMsg(`Initialized as [${chosenRole.toUpperCase()}] in room [${roomName}]`);
+                logMsg(`v4.0 Initialized as [${chosenRole.toUpperCase()}] in room [${roomName}]`);
                 connectSignalingServer();
             } catch (err) {
                 setStatus('', 'שגיאת הרשאת מיקרופון');
@@ -438,6 +440,8 @@
                         type: 'candidate',
                         candidate: event.candidate
                     });
+                } else {
+                    logMsg('ICE gathering complete');
                 }
             };
 
@@ -445,12 +449,12 @@
                 const state = peerConnection.connectionState;
                 logMsg(`WebRTC Peer State: ${state}`);
                 if (state === 'connected') {
-                    setStatus('connected', 'מחובר בשידור חי פעיל (P2P/TURN)');
+                    setStatus('connected', 'מחובר בשידור חי פעיל (v4.0)');
                     startTelemetry();
                 } else if (state === 'connecting') {
                     setStatus('waiting', 'מבצע לחיצת יד מול חומת אש...');
                 } else if (state === 'disconnected' || state === 'failed') {
-                    setStatus('', 'החיבור נותק - מנסה להתחבר מחדש');
+                    setStatus('', `החיבור נותק (${state}) - מנסה להתחבר מחדש`);
                     stopTelemetry();
                 }
             };
@@ -551,7 +555,11 @@
         async function flushCandidates() {
             while (pendingCandidates.length > 0) {
                 const c = pendingCandidates.shift();
-                await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+                } catch (e) {
+                    logMsg(`Candidate add error: ${e.message}`);
+                }
             }
         }
 
