@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web-Codec Pro v4.2 | מערכת שידור P2P אולפנית</title>
+    <title>Web-Codec Pro v4.3 | מערכת שידור P2P אולפנית</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,7 +55,7 @@
 
     <header>
         <div>
-            <h1>WEB-CODEC PRO <span>[v4.2]</span></h1>
+            <h1>WEB-CODEC PRO <span>[v4.3]</span></h1>
             <div class="subtitle">מערכת שידור דו-כיוונית אולפנית מבוססת WebRTC & Opus 48kHz</div>
         </div>
         <div class="status-box">
@@ -81,7 +81,7 @@
             <input type="text" id="roomIdInput" value="studio-live-101" style="text-align: center; font-family: monospace; color: #38bdf8;">
         </div>
 
-        <button onclick="initApp()" class="btn-start">🚀 התחל שידור והתחבר לערוץ (v4.2)</button>
+        <button onclick="initApp()" class="btn-start">🚀 התחל שידור והתחבר לערוץ (v4.3)</button>
     </section>
 
     <!-- פאנל ראשי -->
@@ -93,6 +93,7 @@
                 <div>עמדה: <strong id="activeRoleDisplay" style="color:#38bdf8;"></strong></div>
                 <div>חדר: <span id="activeRoomDisplay" class="badge" style="color:#10b981;"></span></div>
                 <div>דילאיי (RTT): <span id="rttDisplay" class="badge">-- ms</span></div>
+                <div>זמן חיבור: <span id="uptimeDisplay" class="badge" style="color:#f59e0b;">00:00:00</span></div>
             </div>
             <div style="display: flex; gap: 8px;">
                 <button onclick="reconnectPeer()" class="btn-secondary">🔄 חבר מחדש</button>
@@ -165,7 +166,7 @@
 
         <!-- יומן תקשורת טכני -->
         <div class="card" style="padding: 14px;">
-            <div class="field-label" style="margin-bottom: 6px;"><span>יומן חיבורים ותקשורת (Signaling Log v4.2)</span></div>
+            <div class="field-label" style="margin-bottom: 6px;"><span>יומן חיבורים ותקשורת (Signaling Log v4.3)</span></div>
             <div id="techLog" class="log-box"></div>
         </div>
 
@@ -184,6 +185,8 @@
         let txAnalyserL, txAnalyserR, rxAnalyserL, rxAnalyserR;
         let mqttClient = null;
         let statsInterval = null;
+        let uptimeInterval = null;
+        let connectedAt = null;
         let pendingCandidates = [];
         let remotePeerId = null;
         const instanceId = Math.random().toString(36).substring(2, 10);
@@ -192,7 +195,7 @@
         const statusText = document.getElementById('statusText');
         
         // תצורת ICE מותאמת לרשתות מקומיות, סלולריות ואינטרנט מאחורי חומות אש
-        // הערה: אם מופיעה שגיאת ICE Error 401/701 ביומן, יש להחליף את פרטי ה-TURN לחשבון חינמי אישי מ-metered.ca
+        // חובה להזין פרטי TURN אישיים מחשבון חינמי ב-metered.ca כדי שערוץ ממסר (relay) יעבוד בין רשתות שונות
         const rtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -201,13 +204,13 @@
                 { urls: 'stun:stun.cloudflare.com:3478' },
                 {
                     urls: [
-                        'turn:openrelay.metered.ca:80',
-                        'turn:openrelay.metered.ca:80?transport=tcp',
-                        'turn:openrelay.metered.ca:443',
-                        'turns:openrelay.metered.ca:443?transport=tcp'
+                        'turn:global.relay.metered.ca:80',
+                        'turn:global.relay.metered.ca:80?transport=tcp',
+                        'turn:global.relay.metered.ca:443',
+                        'turns:global.relay.metered.ca:443?transport=tcp'
                     ],
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    username: 'YOUR_METERED_USERNAME',
+                    credential: 'YOUR_METERED_PASSWORD'
                 }
             ],
             iceTransportPolicy: 'all',
@@ -224,6 +227,34 @@
         function setStatus(state, text) {
             statusDot.className = 'dot ' + state;
             statusText.textContent = text;
+        }
+
+        function formatDuration(totalSeconds) {
+            const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+            const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+            const secs = String(totalSeconds % 60).padStart(2, '0');
+            return `${hrs}:${mins}:${secs}`;
+        }
+
+        function startUptimeTimer() {
+            resetUptimeTimer();
+            connectedAt = Date.now();
+            document.getElementById('uptimeDisplay').textContent = '00:00:00';
+            uptimeInterval = setInterval(() => {
+                if (!connectedAt) return;
+                const elapsed = Math.floor((Date.now() - connectedAt) / 1000);
+                document.getElementById('uptimeDisplay').textContent = formatDuration(elapsed);
+            }, 1000);
+        }
+
+        function resetUptimeTimer() {
+            if (uptimeInterval) {
+                clearInterval(uptimeInterval);
+                uptimeInterval = null;
+            }
+            connectedAt = null;
+            const el = document.getElementById('uptimeDisplay');
+            if (el) el.textContent = '00:00:00';
         }
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -255,7 +286,7 @@
                 document.getElementById('activeRoleDisplay').textContent = chosenRole === 'studio' ? '🎙️ אולפן ראשי' : '📻 כתב שטח';
                 document.getElementById('activeRoomDisplay').textContent = roomName;
 
-                logMsg(`v4.2 Initialized as [${chosenRole.toUpperCase()}] in room [${roomName}]`);
+                logMsg(`v4.3 Initialized as [${chosenRole.toUpperCase()}] in room [${roomName}]`);
                 connectSignalingServer();
             } catch (err) {
                 setStatus('', 'שגיאת הרשאת מיקרופון');
@@ -413,6 +444,7 @@
             if (peerConnection) {
                 peerConnection.close();
             }
+            resetUptimeTimer();
             pendingCandidates = [];
             peerConnection = new RTCPeerConnection(rtcConfig);
 
@@ -462,13 +494,15 @@
                 const state = peerConnection.connectionState;
                 logMsg(`WebRTC Peer State: ${state}`);
                 if (state === 'connected') {
-                    setStatus('connected', 'מחובר בשידור חי פעיל (v4.2)');
+                    setStatus('connected', 'מחובר בשידור חי פעיל (v4.3)');
                     startTelemetry();
+                    if (!uptimeInterval) startUptimeTimer();
                 } else if (state === 'connecting') {
                     setStatus('waiting', 'מבצע לחיצת יד מול חומת אש...');
-                } else if (state === 'disconnected' || state === 'failed') {
+                } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
                     setStatus('', `החיבור נותק (${state}) - מנסה להתחבר מחדש`);
                     stopTelemetry();
+                    resetUptimeTimer();
                 }
             };
         }
@@ -598,6 +632,7 @@
 
         function reconnectPeer() {
             logMsg('Manual reconnect triggered');
+            resetUptimeTimer();
             if (mqttClient && mqttClient.connected) {
                 sendSignal({ type: 'join' });
                 if (chosenRole === 'field') {
